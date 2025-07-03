@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import '../../core/utils/location_utils.dart';
+import 'package:geolocator/geolocator.dart';
 
 class OfflineMapScreen extends StatefulWidget {
   const OfflineMapScreen({Key? key}) : super(key: key);
@@ -10,19 +12,67 @@ class OfflineMapScreen extends StatefulWidget {
 }
 
 class _OfflineMapScreenState extends State<OfflineMapScreen> {
-  // Mock user location
-  final LatLng userLocation = LatLng(28.6139, 77.2090); // Delhi
+  LatLng? userLocation;
+  bool meshActive = true;
+  bool offline = false;
+  bool loading = true;
+  String? errorMsg;
+
   // Mock rescue/resource/group markers
   final List<_MapMarker> markers = [
     _MapMarker(LatLng(28.6145, 77.2100), 'Rescue', Colors.red),
     _MapMarker(LatLng(28.6120, 77.2080), 'Resource', Colors.orange),
     _MapMarker(LatLng(28.6150, 77.2110), 'Group', Colors.blue),
   ];
-  bool meshActive = true;
-  bool offline = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initLocation();
+  }
+
+  Future<void> _initLocation() async {
+    setState(() {
+      loading = true;
+      errorMsg = null;
+    });
+    final position = await LocationUtils.getCurrentLocation();
+    if (position != null) {
+      setState(() {
+        userLocation = LatLng(position.latitude, position.longitude);
+        loading = false;
+      });
+    } else {
+      setState(() {
+        errorMsg = 'Location permission denied or unavailable.';
+        loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (loading) {
+      return Center(child: CircularProgressIndicator());
+    }
+    if (errorMsg != null || userLocation == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.location_off, color: Colors.red, size: 48),
+            SizedBox(height: 16),
+            Text(errorMsg ?? 'Location unavailable', style: TextStyle(color: Colors.white, fontSize: 18)),
+            SizedBox(height: 8),
+            ElevatedButton.icon(
+              icon: Icon(Icons.refresh),
+              label: Text('Retry'),
+              onPressed: _initLocation,
+            ),
+          ],
+        ),
+      );
+    }
     return Column(
       children: [
         Padding(
@@ -66,7 +116,7 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                 children: [
                   FlutterMap(
                     options: MapOptions(
-                      initialCenter: userLocation,
+                      initialCenter: userLocation!,
                       initialZoom: 15.0,
                       interactionOptions: const InteractionOptions(
                         flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
@@ -86,7 +136,7 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                         markers: [
                           // User location marker
                           Marker(
-                            point: userLocation,
+                            point: userLocation!,
                             width: 48,
                             height: 48,
                             child: _UserMarker(),
