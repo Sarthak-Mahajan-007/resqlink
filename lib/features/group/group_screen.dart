@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
-import  `'package:qr/qr.dart';
 import '../../core/models/group.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/storage/local_storage.dart';
