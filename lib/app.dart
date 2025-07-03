@@ -87,13 +87,22 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   Future<void> _initializeApp() async {
     try {
-      await LocalStorage.initialize();
+      await LocalStorage.initialize().timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          print('Initialization timed out, continuing without storage');
+          return;
+        },
+      );
       setState(() {
         _isInitialized = true;
       });
     } catch (e) {
       print('Error initializing app: $e');
-      // Show error dialog or handle initialization failure
+      // Continue even if initialization fails
+      setState(() {
+        _isInitialized = true;
+      });
     }
   }
 
