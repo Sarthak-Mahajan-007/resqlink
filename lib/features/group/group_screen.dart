@@ -47,13 +47,43 @@ class _GroupScreenState extends State<GroupScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.isNotEmpty && userProfile != null) {
+              if (controller.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please enter a group name')),
+                );
+                return;
+              }
+              
+              if (userProfile == null) {
+                // Create a default user profile if none exists
+                userProfile = UserProfile(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: 'User ${DateTime.now().millisecondsSinceEpoch % 1000}',
+                  age: 25,
+                  bloodGroup: 'O+',
+                  allergies: [],
+                  chronicConditions: [],
+                  emergencyContact: 'Emergency Contact',
+                  emergencyPhone: '+1234567890',
+                );
+                await LocalStorage.saveUserProfile(userProfile!);
+              }
+              
+              try {
                 await GroupManager.createGroup(
-                  name: controller.text,
+                  name: controller.text.trim(),
                   adminProfile: userProfile!,
                 );
                 Navigator.pop(ctx);
                 _loadData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Group "${controller.text.trim()}" created successfully!')),
+                );
+              } catch (e) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to create group: ${e.toString()}')),
+                );
               }
             },
             child: Text('Create'),
@@ -108,11 +138,48 @@ class _GroupScreenState extends State<GroupScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final group = GroupManager.getGroup(controller.text);
-              if (group != null && userProfile != null) {
+              if (controller.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Please enter a group ID')),
+                );
+                return;
+              }
+              
+              if (userProfile == null) {
+                // Create a default user profile if none exists
+                userProfile = UserProfile(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: 'User ${DateTime.now().millisecondsSinceEpoch % 1000}',
+                  age: 25,
+                  bloodGroup: 'O+',
+                  allergies: [],
+                  chronicConditions: [],
+                  emergencyContact: 'Emergency Contact',
+                  emergencyPhone: '+1234567890',
+                );
+                await LocalStorage.saveUserProfile(userProfile!);
+              }
+              
+              try {
+                final group = GroupManager.getGroup(controller.text.trim());
+                if (group == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Group not found. Please check the group ID.')),
+                  );
+                  return;
+                }
+                
                 await GroupManager.joinGroup(group: group, userProfile: userProfile!);
                 Navigator.pop(ctx);
                 _loadData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Successfully joined group: ${group.name}')),
+                );
+              } catch (e) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to join group: ${e.toString()}')),
+                );
               }
             },
             child: Text('Join'),
@@ -160,17 +227,41 @@ class _GroupScreenState extends State<GroupScreen> {
           height: 400,
           child: _QrScanner(
             onGroupId: (groupId) async {
-              final group = GroupManager.getGroup(groupId);
-              if (group != null && userProfile != null) {
+              if (userProfile == null) {
+                // Create a default user profile if none exists
+                userProfile = UserProfile(
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
+                  name: 'User ${DateTime.now().millisecondsSinceEpoch % 1000}',
+                  age: 25,
+                  bloodGroup: 'O+',
+                  allergies: [],
+                  chronicConditions: [],
+                  emergencyContact: 'Emergency Contact',
+                  emergencyPhone: '+1234567890',
+                );
+                await LocalStorage.saveUserProfile(userProfile!);
+              }
+              
+              try {
+                final group = GroupManager.getGroup(groupId);
+                if (group == null) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Group not found. Please check the QR code.')),
+                  );
+                  return;
+                }
+                
                 await GroupManager.joinGroup(group: group, userProfile: userProfile!);
                 Navigator.pop(ctx);
                 _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Joined group: ${group.name}')),
+                  SnackBar(content: Text('Successfully joined group: ${group.name}')),
                 );
-              } else {
+              } catch (e) {
+                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Group not found.')),
+                  SnackBar(content: Text('Failed to join group: ${e.toString()}')),
                 );
               }
             },
@@ -187,156 +278,191 @@ class _GroupScreenState extends State<GroupScreen> {
     );
   }
 
+  void _deleteGroupWithConfirmation(Group group) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete Group'),
+        content: Text('Are you sure you want to delete "${group.name}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              try {
+                await GroupManager.deleteGroup(group.id);
+                Navigator.pop(ctx);
+                _loadData();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Group "${group.name}" deleted successfully')),
+                );
+              } catch (e) {
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Failed to delete group: ${e.toString()}')),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: Text('Delete', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: null,
-      body: groups.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.groups, size: 80, color: Colors.grey.shade700),
-                  const SizedBox(height: 20),
-                  Text('No groups joined', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                  const SizedBox(height: 10),
-                  Text('Create or join a group to get started.', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                  const SizedBox(height: 30),
-                  ElevatedButton.icon(
-                    icon: Icon(Icons.group_add),
-                    label: Text('Create Group'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green.shade700,
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: _createGroupDialog,
-                  ),
-                  const SizedBox(height: 12),
-                  ElevatedButton.icon(
-                    icon: Icon(Icons.group),
-                    label: Text('Join Group'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blue.shade700,
-                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                      textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                    ),
-                    onPressed: _joinGroupDialog,
-                  ),
-                ],
-              ),
-            )
-          : ListView(
-              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      body: RefreshIndicator(
+        onRefresh: _loadData,
+        child: groups.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    Icon(Icons.groups, size: 80, color: Colors.grey.shade700),
+                    const SizedBox(height: 20),
+                    Text('No groups joined', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 10),
+                    Text('Create or join a group to get started.', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                    const SizedBox(height: 30),
                     ElevatedButton.icon(
                       icon: Icon(Icons.group_add),
                       label: Text('Create Group'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade700,
-                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       onPressed: _createGroupDialog,
                     ),
+                    const SizedBox(height: 12),
                     ElevatedButton.icon(
                       icon: Icon(Icons.group),
                       label: Text('Join Group'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade700,
-                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                        textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                       ),
                       onPressed: _joinGroupDialog,
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
-                ...groups.map((group) => Card(
-                      color: Color(0xFF232323),
-                      elevation: 6,
-                      margin: EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                      child: ExpansionTile(
-                        title: Row(
-                          children: [
-                            Expanded(
-                              child: Text(group.name, style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
-                            ),
-                            IconButton(
-                              icon: Icon(Icons.qr_code, color: Colors.deepPurple, size: 28),
-                              tooltip: 'Show QR',
-                              onPressed: () => _showGroupQrDialog(group),
-                            ),
-                          ],
+              )
+            : ListView(
+                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.group_add),
+                        label: Text('Create Group'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
-                        subtitle: Text('ID: ${group.id}', style: TextStyle(color: Colors.white70)),
-                        children: [
-                          ListTile(
-                            title: Text('Admin: ${group.adminId}', style: TextStyle(color: Colors.white70)),
-                            subtitle: Text('Created: ${group.createdAt}', style: TextStyle(color: Colors.white38)),
-                          ),
-                          ...group.members.map((m) => Card(
-                                color: m.status == 'SOS'
-                                    ? Colors.red.shade100
-                                    : m.status == 'OK'
-                                        ? Colors.green.shade100
-                                        : Colors.grey.shade200,
-                                margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-                                child: ListTile(
-                                  leading: Icon(
-                                    m.status == 'SOS'
-                                        ? Icons.warning
-                                        : m.status == 'OK'
-                                            ? Icons.check_circle
-                                            : Icons.help,
-                                    color: m.status == 'SOS'
-                                        ? Colors.red
-                                        : m.status == 'OK'
-                                            ? Colors.green
-                                            : Colors.grey,
-                                    size: 32,
-                                    semanticLabel: m.status,
-                                  ),
-                                  title: Text(m.name, style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
-                                  subtitle: Text('Status: ${m.status} | Last seen: ${m.lastSeen}', style: TextStyle(color: Colors.black87)),
-                                  trailing: m.isOnline
-                                      ? Icon(Icons.wifi, color: Colors.blue, size: 28)
-                                      : Icon(Icons.wifi_off, color: Colors.grey, size: 28),
-                                  contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                  minLeadingWidth: 40,
-                                ),
-                              )),
-                          ButtonBar(
+                        onPressed: _createGroupDialog,
+                      ),
+                      ElevatedButton.icon(
+                        icon: Icon(Icons.group),
+                        label: Text('Join Group'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.shade700,
+                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                          textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: _joinGroupDialog,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ...groups.map((group) => Card(
+                        color: Color(0xFF232323),
+                        elevation: 6,
+                        margin: EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                        child: ExpansionTile(
+                          title: Row(
                             children: [
-                              ElevatedButton.icon(
-                                icon: Icon(Icons.sos),
-                                label: Text('Send Group SOS'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red.shade700,
-                                  padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                  textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                ),
-                                onPressed: () => _sendGroupSOS(group),
+                              Expanded(
+                                child: Text(group.name, style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
                               ),
-                              TextButton(
-                                child: Text('Delete Group', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                onPressed: () async {
-                                  await GroupManager.deleteGroup(group.id);
-                                  _loadData();
-                                },
+                              IconButton(
+                                icon: Icon(Icons.qr_code, color: Colors.deepPurple, size: 28),
+                                tooltip: 'Show QR',
+                                onPressed: () => _showGroupQrDialog(group),
                               ),
                             ],
                           ),
-                        ],
-                      ),
-                    )),
-              ],
-            ),
+                          subtitle: Text('ID: ${group.id}', style: TextStyle(color: Colors.white70)),
+                          children: [
+                            ListTile(
+                              title: Text('Admin: ${group.adminId}', style: TextStyle(color: Colors.white70)),
+                              subtitle: Text('Created: ${group.createdAt}', style: TextStyle(color: Colors.white38)),
+                            ),
+                            ...group.members.map((m) => Card(
+                                  color: m.status == 'SOS'
+                                      ? Colors.red.shade100
+                                      : m.status == 'OK'
+                                          ? Colors.green.shade100
+                                          : Colors.grey.shade200,
+                                  margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                                  child: ListTile(
+                                    leading: Icon(
+                                      m.status == 'SOS'
+                                          ? Icons.warning
+                                          : m.status == 'OK'
+                                              ? Icons.check_circle
+                                              : Icons.help,
+                                      color: m.status == 'SOS'
+                                          ? Colors.red
+                                          : m.status == 'OK'
+                                              ? Colors.green
+                                              : Colors.grey,
+                                      size: 32,
+                                      semanticLabel: m.status,
+                                    ),
+                                    title: Text(m.name, style: TextStyle(fontSize: 18, color: Colors.black, fontWeight: FontWeight.bold)),
+                                    subtitle: Text('Status: ${m.status} | Last seen: ${m.lastSeen}', style: TextStyle(color: Colors.black87)),
+                                    trailing: m.isOnline
+                                        ? Icon(Icons.wifi, color: Colors.blue, size: 28)
+                                        : Icon(Icons.wifi_off, color: Colors.grey, size: 28),
+                                    contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                    minLeadingWidth: 40,
+                                  ),
+                                )),
+                            ButtonBar(
+                              children: [
+                                ElevatedButton.icon(
+                                  icon: Icon(Icons.sos),
+                                  label: Text('Send Group SOS'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.red.shade700,
+                                    padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                                  ),
+                                  onPressed: () => _sendGroupSOS(group),
+                                ),
+                                TextButton(
+                                  child: Text('Delete Group', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                  onPressed: () => _deleteGroupWithConfirmation(group),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      )),
+                ],
+              ),
+      ),
       floatingActionButton: groups.isNotEmpty
           ? FloatingActionButton.extended(
               backgroundColor: Colors.green.shade700,
@@ -358,26 +484,113 @@ class _QrScanner extends StatefulWidget {
 
 class _QrScannerState extends State<_QrScanner> {
   bool scanned = false;
+  String? errorMessage;
 
   @override
   Widget build(BuildContext context) {
-    return MobileScanner(
-      onDetect: (capture) {
-        if (scanned) return;
-        final barcodes = capture.barcodes;
-        for (final barcode in barcodes) {
-          final data = barcode.rawValue;
-          if (data != null && data.contains('id')) {
-            final id = RegExp(r'"id":"([^"]+)"').firstMatch(data)?.group(1);
-            if (id != null) {
-              scanned = true;
-              widget.onGroupId(id);
-              Navigator.of(context).pop();
-              break;
-            }
-          }
-        }
-      },
+    return Column(
+      children: [
+        AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: Text('Scan QR Code', style: TextStyle(color: Colors.white)),
+          leading: IconButton(
+            icon: Icon(Icons.close, color: Colors.white),
+            onPressed: () => Navigator.of(context).pop(),
+          ),
+        ),
+        Expanded(
+          child: Stack(
+            children: [
+              MobileScanner(
+                onDetect: (capture) {
+                  if (scanned) return;
+                  final barcodes = capture.barcodes;
+                  for (final barcode in barcodes) {
+                    final data = barcode.rawValue;
+                    if (data != null && data.contains('id')) {
+                      try {
+                        final id = RegExp(r'"id":"([^"]+)"').firstMatch(data)?.group(1);
+                        if (id != null) {
+                          scanned = true;
+                          widget.onGroupId(id);
+                          break;
+                        } else {
+                          setState(() {
+                            errorMessage = 'Invalid QR code format';
+                          });
+                        }
+                      } catch (e) {
+                        setState(() {
+                          errorMessage = 'Error processing QR code';
+                        });
+                      }
+                    } else {
+                      setState(() {
+                        errorMessage = 'Invalid QR code content';
+                      });
+                    }
+                  }
+                },
+                errorBuilder: (context, error, child) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.error, color: Colors.red, size: 48),
+                        SizedBox(height: 16),
+                        Text(
+                          'Camera Error',
+                          style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          error.errorDetails?.message ?? 'Unable to access camera',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+              if (errorMessage != null)
+                Positioned(
+                  top: 20,
+                  left: 20,
+                  right: 20,
+                  child: Container(
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.error, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            errorMessage!,
+                            style: TextStyle(color: Colors.white, fontSize: 14),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close, color: Colors.white, size: 20),
+                          onPressed: () {
+                            setState(() {
+                              errorMessage = null;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 } 
