@@ -31,7 +31,19 @@ class GroupManager {
       createdAt: DateTime.now(),
       description: description,
     );
+    
+    print('Creating group: ${group.name} (${group.id})');
     await LocalStorage.saveGroup(group);
+    print('Group saved successfully');
+    
+    // Verify the group was saved
+    final savedGroup = LocalStorage.getGroup(group.id);
+    if (savedGroup != null) {
+      print('Group verified in storage: ${savedGroup.name}');
+    } else {
+      print('ERROR: Group not found in storage after saving!');
+    }
+    
     return group;
   }
 
@@ -62,7 +74,12 @@ class GroupManager {
 
   // Get all groups
   static List<Group> getAllGroups() {
-    return LocalStorage.getAllGroups();
+    final groups = LocalStorage.getAllGroups();
+    print('GroupManager.getAllGroups() called, found ${groups.length} groups');
+    for (var group in groups) {
+      print('  - ${group.name} (${group.id}) with ${group.members.length} members');
+    }
+    return groups;
   }
 
   // Get a group by ID

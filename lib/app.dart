@@ -85,6 +85,7 @@ class MainScaffold extends StatefulWidget {
 
 class _MainScaffoldState extends State<MainScaffold> {
   int _currentIndex = 0;
+  bool _isInitialized = false;
 
   final List<Widget> _screens = [
     const HomeDashboard(),
@@ -107,7 +108,28 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   void initState() {
     super.initState();
-    LocalStorage.initialize();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      await LocalStorage.initialize().timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          print('Initialization timed out, continuing without storage');
+          return;
+        },
+      );
+      setState(() {
+        _isInitialized = true;
+      });
+    } catch (e) {
+      print('Error initializing app: $e');
+      // Continue even if initialization fails
+      setState(() {
+        _isInitialized = true;
+      });
+    }
   }
 
   void _openDrawer() {
@@ -116,6 +138,22 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.red.shade700),
+              SizedBox(height: 16),
+              Text('Initializing...', style: TextStyle(color: Colors.white)),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Text(_titles[_currentIndex]),

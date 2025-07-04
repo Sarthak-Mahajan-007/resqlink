@@ -16,53 +16,129 @@ class LocalStorage {
   static const String _contactsKey = 'emergency_contacts';
 
   static Future<void> initialize() async {
-    await Hive.initFlutter();
-    
-    // Register adapters
-    Hive.registerAdapter(UserProfileAdapter());
-    Hive.registerAdapter(GroupAdapter());
-    Hive.registerAdapter(GroupMemberAdapter());
-    Hive.registerAdapter(SosMessageAdapter());
-    Hive.registerAdapter(ResourceModelAdapter());
-    
-    // Open boxes
-    await Hive.openBox<UserProfile>(_userProfileBox);
-    await Hive.openBox<Group>(_groupsBox);
-    await Hive.openBox<SosMessage>(_sosLogBox);
-    await Hive.openBox<ResourceModel>(_resourcesBox);
-    await Hive.openBox(_settingsBox);
+    try {
+      await Hive.initFlutter();
+      
+      // Register adapters with error handling
+      if (!Hive.isAdapterRegistered(0)) {
+        Hive.registerAdapter(UserProfileAdapter());
+      }
+      if (!Hive.isAdapterRegistered(1)) {
+        Hive.registerAdapter(GroupAdapter());
+      }
+      if (!Hive.isAdapterRegistered(2)) {
+        Hive.registerAdapter(GroupMemberAdapter());
+      }
+      if (!Hive.isAdapterRegistered(3)) {
+        Hive.registerAdapter(SosMessageAdapter());
+      }
+      if (!Hive.isAdapterRegistered(4)) {
+        Hive.registerAdapter(ResourceModelAdapter());
+      }
+      
+      // Open boxes with error handling
+      try {
+        await Hive.openBox<UserProfile>(_userProfileBox);
+      } catch (e) {
+        print('Error opening user profile box: $e');
+      }
+      
+      try {
+        await Hive.openBox<Group>(_groupsBox);
+      } catch (e) {
+        print('Error opening groups box: $e');
+      }
+      
+      try {
+        await Hive.openBox<SosMessage>(_sosLogBox);
+      } catch (e) {
+        print('Error opening SOS log box: $e');
+      }
+      
+      try {
+        await Hive.openBox<ResourceModel>(_resourcesBox);
+      } catch (e) {
+        print('Error opening resources box: $e');
+      }
+      
+      try {
+        await Hive.openBox(_settingsBox);
+      } catch (e) {
+        print('Error opening settings box: $e');
+      }
+      
+    } catch (e) {
+      print('Error initializing Hive: $e');
+      // Continue without Hive if it fails
+    }
   }
 
   // User Profile Methods
   static Future<void> saveUserProfile(UserProfile profile) async {
-    final box = Hive.box<UserProfile>(_userProfileBox);
-    await box.put('current', profile);
+    try {
+      final box = Hive.box<UserProfile>(_userProfileBox);
+      await box.put('current', profile);
+    } catch (e) {
+      print('Error saving user profile: $e');
+    }
   }
 
   static UserProfile? getUserProfile() {
-    final box = Hive.box<UserProfile>(_userProfileBox);
-    return box.get('current');
+    try {
+      final box = Hive.box<UserProfile>(_userProfileBox);
+      return box.get('current');
+    } catch (e) {
+      print('Error getting user profile: $e');
+      return null;
+    }
   }
 
   // Group Methods
   static Future<void> saveGroup(Group group) async {
-    final box = Hive.box<Group>(_groupsBox);
-    await box.put(group.id, group);
+    try {
+      final box = Hive.box<Group>(_groupsBox);
+      await box.put(group.id, group);
+    } catch (e) {
+      print('Error saving group: $e');
+    }
   }
 
   static Group? getGroup(String groupId) {
-    final box = Hive.box<Group>(_groupsBox);
-    return box.get(groupId);
+    try {
+      final box = Hive.box<Group>(_groupsBox);
+      return box.get(groupId);
+    } catch (e) {
+      print('Error getting group: $e');
+      return null;
+    }
   }
 
   static List<Group> getAllGroups() {
-    final box = Hive.box<Group>(_groupsBox);
-    return box.values.toList();
+    try {
+      final box = Hive.box<Group>(_groupsBox);
+      if (!box.isOpen) {
+        print('ERROR: Groups box is not open!');
+        return [];
+      }
+      final groups = box.values.toList();
+      print('LocalStorage.getAllGroups() called, box is open, found ${groups.length} groups');
+      for (var group in groups) {
+        print('  - ${group.name} (${group.id}) with ${group.members.length} members');
+      }
+      return groups;
+    } catch (e) {
+      print('Error getting all groups: $e');
+      return [];
+    }
   }
 
   static Future<void> deleteGroup(String groupId) async {
-    final box = Hive.box<Group>(_groupsBox);
-    await box.delete(groupId);
+    try {
+      final box = Hive.box<Group>(_groupsBox);
+      await box.delete(groupId);
+    } catch (e) {
+      print('Error deleting group: $e');
+    }
   }
 
   // SOS Log Methods
