@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'app.dart';
+import 'theme/theme_notifier.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const ResQlinkApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => ThemeNotifier(),
+      child: const ResQlinkApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {

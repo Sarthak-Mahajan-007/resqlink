@@ -423,13 +423,14 @@ class _ResourceBroadcastScreenState extends State<ResourceBroadcastScreen> {
 
   void _broadcastResource() {
     if (_formKey.currentState!.validate()) {
+      final userProfile = LocalStorage.getUserProfile();
       final resource = ResourceModel(
         id: const Uuid().v4(),
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         type: _selectedType,
         category: _selectedCategory,
-        userId: 'current_user', // TODO: Get from user profile
+        userId: userProfile?.id ?? 'anonymous',
         timestamp: DateTime.now(),
         ttl: 10,
         isUrgent: _isUrgent,

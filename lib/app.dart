@@ -14,16 +14,43 @@ import 'core/storage/local_storage.dart';
 import 'core/utils/battery_utils.dart';
 import 'core/ble/ble_mesh_service.dart';
 import 'core/utils/location_utils.dart';
+import 'package:provider/provider.dart';
+import 'theme/theme_notifier.dart';
+import 'features/first_aid/first_aid_screen.dart';
+import 'features/qr_code/qr_code_screen.dart';
+import 'features/volunteer/volunteer_mode_screen.dart';
+import 'features/about/about_screen.dart';
 
 class ResQlinkApp extends StatelessWidget {
   const ResQlinkApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final themeNotifier = Provider.of<ThemeNotifier>(context);
     return MaterialApp(
       title: 'resQlink',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.light,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.red.shade700,
+          brightness: Brightness.light,
+        ),
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Color(0xFFF5F5F5),
+          foregroundColor: Colors.black,
+          elevation: 2,
+        ),
+        bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+          backgroundColor: Color(0xFFF5F5F5),
+          selectedItemColor: Color(0xFFD32F2F),
+          unselectedItemColor: Color(0xFF888888),
+          showUnselectedLabels: true,
+        ),
+      ),
+      darkTheme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
         colorScheme: ColorScheme.fromSeed(
@@ -43,6 +70,7 @@ class ResQlinkApp extends StatelessWidget {
           showUnselectedLabels: true,
         ),
       ),
+      themeMode: themeNotifier.themeMode,
       home: const MainScaffold(),
     );
   }
@@ -60,7 +88,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _screens = [
     const HomeDashboard(),
-    const SosTab(),
     const OfflineMapScreen(),
     const GroupScreen(),
     const ResourceBroadcastScreen(),
@@ -70,7 +97,6 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<String> _titles = [
     'Home',
-    'SOS',
     'Map',
     'Groups',
     'Resources',
@@ -121,6 +147,14 @@ class _MainScaffoldState extends State<MainScaffold> {
               },
             ),
             ListTile(
+              leading: Icon(Icons.medical_services),
+              title: Text('First Aid Manual'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FirstAidScreen()));
+              },
+            ),
+            ListTile(
               leading: Icon(Icons.local_hospital),
               title: Text('Nearby Hospitals'),
               onTap: () {
@@ -132,24 +166,30 @@ class _MainScaffoldState extends State<MainScaffold> {
               leading: Icon(Icons.qr_code),
               title: Text('QR Code'),
               onTap: () {
-                // TODO: Implement QR Code screen
                 Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => QrCodeScreen(data: 'resQlink-user-or-group-id'),
+                ));
               },
             ),
             ListTile(
               leading: Icon(Icons.volunteer_activism),
               title: Text('Volunteer Mode'),
               onTap: () {
-                // TODO: Implement Volunteer Mode
                 Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const VolunteerModeScreen(),
+                ));
               },
             ),
             ListTile(
               leading: Icon(Icons.info_outline),
               title: Text('About'),
               onTap: () {
-                // TODO: Implement About screen
                 Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const AboutScreen(),
+                ));
               },
             ),
           ],
@@ -166,7 +206,6 @@ class _MainScaffoldState extends State<MainScaffold> {
         type: BottomNavigationBarType.fixed,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.sos), label: 'SOS'),
           BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
           BottomNavigationBarItem(icon: Icon(Icons.groups), label: 'Groups'),
           BottomNavigationBarItem(icon: Icon(Icons.inventory_2), label: 'Resources'),
@@ -174,39 +213,6 @@ class _MainScaffoldState extends State<MainScaffold> {
           BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Settings'),
         ],
       ),
-    );
-  }
-}
-
-class SosTab extends StatelessWidget {
-  const SosTab({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(16),
-          color: Colors.red.shade50,
-          child: const Row(
-            children: [
-              Icon(Icons.warning, color: Colors.red, size: 24),
-              SizedBox(width: 8),
-              Text(
-                'Emergency SOS System',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.red,
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(child: SosSender()),
-        const Divider(height: 1),
-        Expanded(child: SosReceiver()),
-      ],
     );
   }
 }

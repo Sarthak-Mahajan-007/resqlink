@@ -3,6 +3,9 @@ import '../models/user_profile.dart';
 import '../models/group.dart';
 import '../models/sos_message.dart';
 import '../models/resource_model.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/contact.dart';
+import 'dart:convert';
 
 class LocalStorage {
   static const String _userProfileBox = 'user_profile';
@@ -10,6 +13,7 @@ class LocalStorage {
   static const String _sosLogBox = 'sos_log';
   static const String _resourcesBox = 'resources';
   static const String _settingsBox = 'settings';
+  static const String _contactsKey = 'emergency_contacts';
 
   static Future<void> initialize() async {
     await Hive.initFlutter();
@@ -116,6 +120,42 @@ class LocalStorage {
     await Hive.box<SosMessage>(_sosLogBox).clear();
     await Hive.box<ResourceModel>(_resourcesBox).clear();
     await Hive.box(_settingsBox).clear();
+  }
+
+  static Future<List<Contact>> getContacts() async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = prefs.getString(_contactsKey);
+    if (jsonString == null) return [];
+    final List<dynamic> jsonList = json.decode(jsonString);
+    return jsonList.map((e) => Contact.fromJson(e)).toList();
+  }
+
+  static Future<void> saveContacts(List<Contact> contacts) async {
+    final prefs = await SharedPreferences.getInstance();
+    final jsonString = json.encode(contacts.map((e) => e.toJson()).toList());
+    await prefs.setString(_contactsKey, jsonString);
+  }
+
+  static Future<void> addContact(Contact contact) async {
+    final contacts = await getContacts();
+    contacts.add(contact);
+    await saveContacts(contacts);
+  }
+
+  static Future<void> updateContact(int index, Contact contact) async {
+    final contacts = await getContacts();
+    if (index >= 0 && index < contacts.length) {
+      contacts[index] = contact;
+      await saveContacts(contacts);
+    }
+  }
+
+  static Future<void> deleteContact(int index) async {
+    final contacts = await getContacts();
+    if (index >= 0 && index < contacts.length) {
+      contacts.removeAt(index);
+      await saveContacts(contacts);
+    }
   }
 }
 

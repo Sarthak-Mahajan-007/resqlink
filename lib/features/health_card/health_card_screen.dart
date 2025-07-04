@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../core/models/user_profile.dart';
 import '../../core/storage/local_storage.dart';
 import 'edit_health_card.dart';
+import '../../theme/app_theme.dart';
 
 class HealthCardScreen extends StatefulWidget {
   const HealthCardScreen({Key? key}) : super(key: key);
@@ -28,135 +29,152 @@ class _HealthCardScreenState extends State<HealthCardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black,
-      child: ListView(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 32),
-        children: [
-          // Header
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Color(0xFF232323),
-              borderRadius: BorderRadius.circular(32),
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 40,
-                  backgroundColor: Color(0xFF181818),
-                  child: Icon(Icons.person, color: Colors.white, size: 40),
-                ),
-                const SizedBox(width: 24),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      _profile!.name,
-                      style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Color(0xFFD32F2F),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        _profile!.bloodGroup,
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 32),
-          // Editable Fields
-          _EditableField(label: 'Age', value: '${_profile!.age} years'),
-          _EditableField(label: 'Allergies', value: _profile!.allergies.join(', ')),
-          _EditableField(label: 'Conditions', value: _profile!.chronicConditions.join(', ')),
-          const SizedBox(height: 32),
-          // Emergency Contacts
-          Text(
-            'Emergency Contacts',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _ContactTile(name: 'Emergency Contact', phone: _profile!.emergencyContact),
-          _ContactTile(name: 'Phone', phone: _profile!.emergencyPhone),
-          const SizedBox(height: 32),
-          // Medical Timeline
-          Text(
-            'Medical Timeline',
-            style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          _TimelineEntry(date: '2024-05-01', type: 'Checkup', preview: 'Routine checkup, all clear.'),
-          _TimelineEntry(date: '2023-12-10', type: 'Asthma', preview: 'Mild attack, inhaler used.'),
-        ],
-      ),
-    );
-  }
-
-  Widget _EditableField({required String label, required String value}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
-      decoration: BoxDecoration(
-        color: Color(0xFF232323),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Text(label, style: TextStyle(color: Colors.grey[400], fontSize: 18)),
-          const SizedBox(width: 24),
-          Expanded(
-            child: Text(value, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ),
-          Icon(Icons.edit, color: Colors.grey[600], size: 20),
-        ],
-      ),
-    );
-  }
-
-  Widget _ContactTile({required String name, required String phone}) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-      decoration: BoxDecoration(
-        color: Color(0xFF232323),
-        borderRadius: BorderRadius.circular(24),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.phone, color: Color(0xFFD32F2F), size: 22),
-          const SizedBox(width: 16),
-          Expanded(child: Text(name, style: TextStyle(color: Colors.white, fontSize: 18))),
-          Text(phone, style: TextStyle(color: Colors.grey[400], fontSize: 16)),
-        ],
-      ),
-    );
-  }
-
-  Widget _TimelineEntry({required String date, required String type, required String preview}) {
-    return ExpansionTile(
-      backgroundColor: Color(0xFF232323),
-      collapsedBackgroundColor: Color(0xFF232323),
-      title: Row(
-        children: [
-          Text(date, style: TextStyle(color: Colors.grey[400], fontSize: 16)),
-          const SizedBox(width: 16),
-          Text(type, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-        ],
-      ),
-      children: [
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-          child: Text(preview, style: TextStyle(color: Colors.white, fontSize: 16)),
+    return Scaffold(
+      backgroundColor: AppTheme.background,
+      appBar: AppBar(
+        backgroundColor: AppTheme.navy,
+        elevation: 0,
+        title: Row(
+          children: [
+            Icon(Icons.favorite, color: Colors.redAccent), // heart icon
+            const SizedBox(width: 8),
+            Text('Health Card', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
+          ],
         ),
-      ],
+        actions: [
+          IconButton(
+            icon: Icon(Icons.save, color: AppTheme.lightBlue), // save icon
+            onPressed: () {},
+            tooltip: 'Save',
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Form Fields
+            _FormFieldCard(
+              icon: Icons.person,
+              label: 'Name',
+              child: TextField(decoration: InputDecoration(hintText: 'Enter your name')),
+            ),
+            _FormFieldCard(
+              icon: Icons.calendar_today,
+              label: 'Age',
+              child: TextField(keyboardType: TextInputType.number, decoration: InputDecoration(hintText: 'Enter your age')),
+            ),
+            _FormFieldCard(
+              icon: Icons.opacity,
+              label: 'Blood Type',
+              child: DropdownButtonFormField<String>(
+                items: ['A+', 'B+', 'O+', 'AB+', 'A-', 'B-', 'O-', 'AB-']
+                    .map((type) => DropdownMenuItem(value: type, child: Text(type)))
+                    .toList(),
+                onChanged: (v) {},
+                decoration: InputDecoration(hintText: 'Select blood type'),
+              ),
+            ),
+            _FormFieldCard(
+              icon: Icons.warning,
+              label: 'Allergies',
+              child: TextField(maxLines: 2, decoration: InputDecoration(hintText: 'List allergies')),
+            ),
+            _FormFieldCard(
+              icon: Icons.medical_services,
+              label: 'Medical Conditions',
+              child: TextField(maxLines: 2, decoration: InputDecoration(hintText: 'List conditions')),
+            ),
+            _FormFieldCard(
+              icon: Icons.phone,
+              label: 'Emergency Contact',
+              child: TextField(decoration: InputDecoration(hintText: 'Enter contact number')),
+            ),
+            const SizedBox(height: 32),
+            // QR Code Section
+            Center(
+              child: Column(
+                children: [
+                  Container(
+                    width: 200,
+                    height: 200,
+                    color: Colors.grey[200], // Placeholder for QR code
+                    child: Center(child: Icon(Icons.qr_code, size: 80, color: AppTheme.navy)),
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.qr_code),
+                    label: Text('Share Health Info'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.lightBlue,
+                      foregroundColor: Colors.white,
+                      minimumSize: Size(double.infinity, 48),
+                      textStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    onPressed: () {},
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+            // Action Buttons
+            ElevatedButton(
+              onPressed: () {},
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.lightBlue,
+                foregroundColor: Colors.white,
+                minimumSize: Size(double.infinity, 48),
+                textStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              child: Text('Save'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: () {},
+              icon: Icon(Icons.qr_code),
+              label: Text('Generate QR'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: Size(double.infinity, 48),
+                textStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _FormFieldCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Widget child;
+  const _FormFieldCard({required this.icon, required this.label, required this.child});
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, color: AppTheme.navy),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.navy)),
+                  const SizedBox(height: 4),
+                  child,
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 } 

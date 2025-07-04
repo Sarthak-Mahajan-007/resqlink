@@ -4,6 +4,8 @@ import '../../core/models/sos_message.dart';
 import '../../core/storage/local_storage.dart';
 import '../../core/utils/location_utils.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:app_settings/app_settings.dart';
+import '../../theme/app_theme.dart';
 
 class SosReceiver extends StatefulWidget {
   const SosReceiver({Key? key}) : super(key: key);
@@ -39,12 +41,23 @@ class _SosReceiverState extends State<SosReceiver> {
         Permission.locationWhenInUse,
         Permission.locationAlways,
       ].request();
-      if (statuses.values.any((status) => !status.isGranted)) {
+      final denied = statuses.entries.where((e) => !e.value.isGranted).map((e) => e.key).toList();
+      if (denied.isNotEmpty) {
         setState(() {
           _scanning = false;
         });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Permissions required for SOS scan not granted.'), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('Permissions not granted: ' + denied.map((p) => p.toString().split('.').last).join(', ') + '. Please grant all permissions.'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Settings',
+              textColor: Colors.white,
+              onPressed: () async {
+                await openAppSettings();
+              },
+            ),
+          ),
         );
         return;
       }
@@ -100,56 +113,39 @@ class _SosReceiverState extends State<SosReceiver> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildHeader(),
-        Expanded(
-          child: _received.isEmpty
-              ? _buildEmptyState()
-              : ListView.builder(
-                  itemCount: _received.length,
-                  itemBuilder: (context, index) {
-                    final msg = _received[index];
-                    return _buildSosCard(msg);
-                  },
-                ),
-        ),
-      ],
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          _buildHeader(),
+          SizedBox(
+            height: MediaQuery.of(context).size.height * 0.7,
+            child: _received.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    itemCount: _received.length,
+                    itemBuilder: (context, index) {
+                      final msg = _received[index];
+                      return _buildSosCard(msg);
+                    },
+                  ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.blue.shade50,
-      child: Row(
-        children: [
-          const Icon(Icons.call_received, color: Colors.blue),
-          const SizedBox(width: 8),
-          const Text(
-            'Received SOS Messages',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: Colors.blue,
-            ),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24.0),
+      child: Center(
+        child: Text(
+          'Received SOS Messages',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey.shade600,
           ),
-          const Spacer(),
-          if (_scanning)
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 3),
-            ),
-          const SizedBox(width: 8),
-          Text(
-            '${_received.length} messages',
-            style: const TextStyle(
-              fontSize: 14,
-              color: Colors.grey,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
