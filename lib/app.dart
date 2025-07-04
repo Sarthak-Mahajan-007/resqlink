@@ -108,23 +108,27 @@ class _MainScaffoldState extends State<MainScaffold> {
   @override
   void initState() {
     super.initState();
+    print('DEBUG: MainScaffold initState - calling _initializeApp');
     _initializeApp();
   }
 
   Future<void> _initializeApp() async {
     try {
+      print('DEBUG: Initializing LocalStorage...');
+      // Add timeout to prevent getting stuck
       await LocalStorage.initialize().timeout(
         Duration(seconds: 10),
         onTimeout: () {
-          print('Initialization timed out, continuing without storage');
+          print('DEBUG: LocalStorage initialization timed out, continuing without storage');
           return;
         },
       );
+      print('DEBUG: LocalStorage initialized!');
       setState(() {
         _isInitialized = true;
       });
     } catch (e) {
-      print('Error initializing app: $e');
+      print('DEBUG: Error initializing app: $e');
       // Continue even if initialization fails
       setState(() {
         _isInitialized = true;
@@ -138,6 +142,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    print('DEBUG: MainScaffold build - _isInitialized=$_isInitialized');
     if (!_isInitialized) {
       return Scaffold(
         backgroundColor: Colors.black,

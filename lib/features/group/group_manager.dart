@@ -1,7 +1,8 @@
 import 'package:uuid/uuid.dart';
 import '../../core/models/group.dart';
 import '../../core/models/user_profile.dart';
-import '../../core/storage/local_storage.dart';
+import '../../core/storage/local_storage.dart' as my_local;
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class GroupManager {
   static final Uuid _uuid = Uuid();
@@ -31,28 +32,67 @@ class GroupManager {
       createdAt: DateTime.now(),
       description: description,
     );
-    
     print('Creating group: ${group.name} (${group.id})');
-    await LocalStorage.saveGroup(group);
-    print('Group saved successfully');
-    
-    // Verify the group was saved
-    final savedGroup = LocalStorage.getGroup(group.id);
-    if (savedGroup != null) {
-      print('Group verified in storage: ${savedGroup.name}');
-    } else {
-      print('ERROR: Group not found in storage after saving!');
+    await my_local.LocalStorage.saveGroup(group);
+    print('Group saved locally');
+    // Save to Supabase
+    try {
+      final supabase = Supabase.instance.client;
+      final groupInsert = await supabase.from('groups').insert({
+        'name': group.name,
+        'admin_id': int.tryParse(group.adminId) ?? -1,
+        'description': group.description,
+        'created_at': group.createdAt.toIso8601String(),
+      }).select().single();
+      final groupId = groupInsert['id'];
+      // Insert creator as admin member
+      await supabase.from('members').insert({
+        'group_id': groupId,
+        'user_id': int.tryParse(adminProfile.id) ?? -1,
+        'role': 'admin',
+      });
+      print('✅ Group and admin member saved in Supabase');
+    } catch (e) {
+      print('❌ Error saving group or member in Supabase: $e');
     }
-    
     return group;
   }
 
-  // Join an existing group
+  // Fetch group by ID from Supabase
+  static Future<Group?> fetchGroupFromSupabase(String groupId) async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase.from('groups').select().eq('id', groupId).single();
+      if (response != null) {
+        // You may need to adjust this if your Group.fromJson expects a different structure
+        return Group.fromJson(response);
+      }
+    } catch (e) {
+      print('Error fetching group from Supabase: $e');
+    }
+    return null;
+  }
+
+  // Get all groups from Supabase
+  static Future<List<Group>> fetchAllGroupsFromSupabase() async {
+    try {
+      final supabase = Supabase.instance.client;
+      final response = await supabase.from('groups').select();
+      if (response != null && response is List) {
+        return response.map((json) => Group.fromJson(json)).toList();
+      }
+    } catch (e) {
+      print('Error fetching all groups from Supabase: $e');
+    }
+    return [];
+  }
+
+  // Join an existing group (add member locally, optionally update Supabase if you have a members table)
   static Future<Group?> joinGroup({
     required Group group,
     required UserProfile userProfile,
   }) async {
-    // Prevent duplicate join
+    // Prevent duplicate join (local check)
     if (group.members.any((m) => m.id == userProfile.id)) {
       return group;
     }
@@ -68,13 +108,25 @@ class GroupManager {
         status: 'OK',
       ),
     );
-    await LocalStorage.saveGroup(updatedGroup);
+    await my_local.LocalStorage.saveGroup(updatedGroup);
+    // Insert into Supabase members table
+    try {
+      final supabase = Supabase.instance.client;
+      await supabase.from('members').insert({
+        'group_id': int.tryParse(group.id) ?? -1,
+        'user_id': int.tryParse(userProfile.id) ?? -1,
+        'role': 'member',
+      });
+      print('✅ Member added to group in Supabase');
+    } catch (e) {
+      print('❌ Error adding member to group in Supabase: $e');
+    }
     return updatedGroup;
   }
 
-  // Get all groups
+  // Local-only methods remain unchanged
   static List<Group> getAllGroups() {
-    final groups = LocalStorage.getAllGroups();
+    final groups = my_local.LocalStorage.getAllGroups();
     print('GroupManager.getAllGroups() called, found ${groups.length} groups');
     for (var group in groups) {
       print('  - ${group.name} (${group.id}) with ${group.members.length} members');
@@ -82,33 +134,25 @@ class GroupManager {
     return groups;
   }
 
-  // Get a group by ID
   static Group? getGroup(String groupId) {
-    return LocalStorage.getGroup(groupId);
+    return my_local.LocalStorage.getGroup(groupId);
   }
 
-  // Update member status in a group
-  static Future<Group?> updateMemberStatus({
-    required String groupId,
-    required String memberId,
-    required String status,
-    double? latitude,
-    double? longitude,
-  }) async {
-    final group = LocalStorage.getGroup(groupId);
-    if (group == null) return null;
-    final updatedGroup = group.updateMemberStatus(
-      memberId,
-      status,
-      lat: latitude,
-      lng: longitude,
-    );
-    await LocalStorage.saveGroup(updatedGroup);
-    return updatedGroup;
-  }
-
-  // Remove a group
   static Future<void> deleteGroup(String groupId) async {
-    await LocalStorage.deleteGroup(groupId);
+    await my_local.LocalStorage.deleteGroup(groupId);
   }
+}
+
+void testLocalGroup() async {
+  final group = Group(
+    id: 'test123',
+    name: 'Test Group',
+    adminId: 'admin1',
+    members: [],
+    createdAt: DateTime.now(),
+    description: 'desc',
+  );
+  await my_local.LocalStorage.saveGroup(group);
+  final loaded = my_local.LocalStorage.getGroup('test123');
+  print('DEBUG: Loaded group: ${loaded?.name}');
 } 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "409397754439",
+    "project_id": "resqlink-281b8",
+    "storage_bucket": "resqlink-281b8.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:409397754439:android:2cc7b0a4cc00a931a10f62",
+        "android_client_info": {
+          "package_name": "reqlink.org.resqlink"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAW_uEY80NEm0FXVEgFRT7pCPnFObcE5xs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

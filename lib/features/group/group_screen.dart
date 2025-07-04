@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/models/group.dart';
 import '../../core/models/user_profile.dart';
-import '../../core/storage/local_storage.dart';
+import '../../core/storage/local_storage.dart' as my_local;
 import 'group_manager.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import '../../core/ble/ble_mesh_service.dart';
-import '../../core/models/sos_message.dart';
-import '../../core/utils/location_utils.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 class GroupScreen extends StatefulWidget {
@@ -20,7 +18,7 @@ class GroupScreen extends StatefulWidget {
 class _GroupScreenState extends State<GroupScreen> {
   List<Group> groups = [];
   UserProfile? userProfile;
-  
+
   // Debug: Add in-memory fallback for testing
   static List<Group> _debugGroups = [];
 
@@ -32,43 +30,77 @@ class _GroupScreenState extends State<GroupScreen> {
 
   Future<void> _loadData() async {
     try {
-      final loadedGroups = GroupManager.getAllGroups();
-      final loadedProfile = LocalStorage.getUserProfile();
-      
-      print('Loaded ${loadedGroups.length} groups from Hive');
-      for (var group in loadedGroups) {
-        print('Group: ${group.name} (${group.id}) with ${group.members.length} members');
+      userProfile = my_local.LocalStorage.getUserProfile();
+      if (userProfile == null) {
+        setState(() {
+          groups = _debugGroups;
+        });
+        return;
       }
-      
-      // Debug: Check debug groups list
-      print('Debug groups count: ${_debugGroups.length}');
-      for (var group in _debugGroups) {
-        print('Debug Group: ${group.name} (${group.id}) with ${group.members.length} members');
+      final supabase = Supabase.instance.client;
+      // 1. Get all group_ids for this user from members table
+      final memberRows = await supabase
+          .from('members')
+          .select('group_id')
+          .eq('user_id', int.tryParse(userProfile!.id) ?? -1);
+      final groupIds = memberRows.map((row) => row['group_id']).toList();
+      List<Group> userGroups = [];
+      if (groupIds.isNotEmpty) {
+        final groupsResponse = await supabase
+            .from('groups')
+            .select()
+            .inFilter('id', groupIds);
+        userGroups = await Future.wait(groupsResponse.map<Future<Group>>( (g) async {
+          // Fetch members for this group
+          final memberList = await supabase
+            .from('members')
+            .select('user_id, role')
+            .eq('group_id', g['id']);
+          List<GroupMember> members = [];
+          if (memberList.isNotEmpty) {
+            final userIds = memberList.map((m) => m['user_id']).toList();
+            final usersResponse = await supabase
+              .from('users')
+              .select()
+              .inFilter('id', userIds);
+            members = usersResponse.map<GroupMember>((u) {
+              final memberRow = memberList.firstWhere((m) => m['user_id'] == u['id'], orElse: () => {});
+              return GroupMember(
+                id: u['id'].toString(),
+                name: u['name'] ?? '',
+                deviceId: u['id'].toString(),
+                lastSeen: DateTime.now(), // You can update this if you track it
+                isOnline: false, // You can update this if you track it
+                status: 'Unknown', // You can update this if you track it
+              );
+            }).toList();
+          }
+          return Group(
+            id: g['id'].toString(),
+            name: g['name'] ?? '',
+            adminId: g['admin_id']?.toString() ?? '',
+            members: members,
+            createdAt: g['created_at'] != null && g['created_at'] != 'NULL'
+                ? DateTime.tryParse(g['created_at']) ?? DateTime.now()
+                : DateTime.now(),
+            description: g['description'] ?? '',
+          );
+        }));
       }
-      
-      // Use debug groups as fallback if Hive is empty
-      final finalGroups = loadedGroups.isNotEmpty ? loadedGroups : _debugGroups;
-      
       setState(() {
-        groups = finalGroups;
-        userProfile = loadedProfile;
+        groups = userGroups;
       });
-      
-      // Force a rebuild to ensure UI updates
-      if (mounted) {
-        setState(() {});
-      }
     } catch (e) {
       print('Error loading data: $e');
       setState(() {
         groups = _debugGroups; // Use debug groups as fallback
-        userProfile = null;
       });
     }
   }
 
   void _createGroupDialog() async {
     final controller = TextEditingController();
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -84,16 +116,16 @@ class _GroupScreenState extends State<GroupScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              if (controller.text.trim().isEmpty) {
+              final groupName = controller.text.trim();
+              if (groupName.isEmpty) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(content: Text('Please enter a group name')),
                 );
                 return;
               }
-              
-              if (userProfile == null) {
-                // Create a default user profile if none exists
-                userProfile = UserProfile(
+              Navigator.pop(ctx); // Close dialog early for better UX
+              try {
+                userProfile ??= UserProfile(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   name: 'User ${DateTime.now().millisecondsSinceEpoch % 1000}',
                   age: 25,
@@ -103,45 +135,43 @@ class _GroupScreenState extends State<GroupScreen> {
                   emergencyContact: 'Emergency Contact',
                   emergencyPhone: '+1234567890',
                 );
-                await LocalStorage.saveUserProfile(userProfile!);
-              }
-              
-              try {
-                final newGroup = await GroupManager.createGroup(
-                  name: controller.text.trim(),
-                  adminProfile: userProfile!,
-                );
-                
-                // Debug: Add to in-memory list as fallback
-                _GroupScreenState._debugGroups.add(newGroup);
-                print('Added to debug groups list. Total debug groups: ${_GroupScreenState._debugGroups.length}');
-                
-                Navigator.pop(ctx);
-                
-                // Debug: Check groups immediately after creation
-                print('=== AFTER GROUP CREATION ===');
-                final immediateGroups = GroupManager.getAllGroups();
-                print('Immediate groups count: ${immediateGroups.length}');
-                for (var group in immediateGroups) {
-                  print('  - ${group.name} (${group.id})');
+                await my_local.LocalStorage.saveUserProfile(userProfile!);
+                final supabase = Supabase.instance.client;
+                // Ensure user exists in users table
+                final existingUser = await supabase
+                    .from('users')
+                    .select()
+                    .eq('id', int.tryParse(userProfile!.id) ?? -1)
+                    .maybeSingle();
+                if (existingUser == null) {
+                  await supabase.from('users').insert({
+                    'id': int.tryParse(userProfile!.id) ?? -1,
+                    'name': userProfile!.name,
+                  });
                 }
-                
+                // Insert group and get the inserted group with id
+                final groupInsert = await supabase.from('groups').insert({
+                  'name': groupName,
+                  'admin_id': int.tryParse(userProfile!.id) ?? -1,
+                  'description': '',
+                  'created_at': DateTime.now().toIso8601String(),
+                }).select().single();
+                final groupId = groupInsert['id'];
+                // Insert creator as admin member
+                await supabase.from('members').insert({
+                  'group_id': groupId,
+                  'user_id': int.tryParse(userProfile!.id) ?? -1,
+                  'role': 'admin',
+                });
                 await _loadData();
-                
-                // Debug: Check groups after _loadData
-                print('=== AFTER _loadData ===');
-                print('UI groups count: ${groups.length}');
-                for (var group in groups) {
-                  print('  - ${group.name} (${group.id})');
-                }
-                
+                if (mounted) setState(() {});
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Group "${controller.text.trim()}" created successfully!')),
+                  SnackBar(content: Text('Group created!')),
                 );
               } catch (e) {
-                Navigator.pop(ctx);
+                print('❌ Error creating group: $e');
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to create group: ${e.toString()}')),
+                  SnackBar(content: Text('Failed to create group: $e')),
                 );
               }
             },
@@ -203,9 +233,7 @@ class _GroupScreenState extends State<GroupScreen> {
                 );
                 return;
               }
-              
               if (userProfile == null) {
-                // Create a default user profile if none exists
                 userProfile = UserProfile(
                   id: DateTime.now().millisecondsSinceEpoch.toString(),
                   name: 'User ${DateTime.now().millisecondsSinceEpoch % 1000}',
@@ -216,23 +244,40 @@ class _GroupScreenState extends State<GroupScreen> {
                   emergencyContact: 'Emergency Contact',
                   emergencyPhone: '+1234567890',
                 );
-                await LocalStorage.saveUserProfile(userProfile!);
+                await my_local.LocalStorage.saveUserProfile(userProfile!);
               }
-              
               try {
-                final group = GroupManager.getGroup(controller.text.trim());
-                if (group == null) {
+                final supabase = Supabase.instance.client;
+                // Ensure user exists in users table
+                final existingUser = await supabase
+                    .from('users')
+                    .select()
+                    .eq('id', int.tryParse(userProfile!.id) ?? -1)
+                    .maybeSingle();
+                if (existingUser == null) {
+                  await supabase.from('users').insert({
+                    'id': int.tryParse(userProfile!.id) ?? -1,
+                    'name': userProfile!.name,
+                  });
+                }
+                // Check if group exists
+                final response = await supabase.from('groups').select().eq('id', controller.text.trim());
+                if (response.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Group not found. Please check the group ID.')),
+                    SnackBar(content: Text('Group not found in database. Please check the group ID.')),
                   );
                   return;
                 }
-                
-                await GroupManager.joinGroup(group: group, userProfile: userProfile!);
-                Navigator.pop(ctx);
+                // Insert into members table
+                await supabase.from('members').insert({
+                  'group_id': int.tryParse(controller.text.trim()) ?? -1,
+                  'user_id': int.tryParse(userProfile!.id) ?? -1,
+                  'role': 'member',
+                });
                 _loadData();
+                Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Successfully joined group: ${group.name}')),
+                  SnackBar(content: Text('Successfully joined group: ${response[0]['name']}')),
                 );
               } catch (e) {
                 Navigator.pop(ctx);
@@ -400,24 +445,26 @@ class _GroupScreenState extends State<GroupScreen> {
                   emergencyContact: 'Emergency Contact',
                   emergencyPhone: '+1234567890',
                 );
-                await LocalStorage.saveUserProfile(userProfile!);
+                await my_local.LocalStorage.saveUserProfile(userProfile!);
               }
               
               try {
-                final group = GroupManager.getGroup(groupId);
-                if (group == null) {
+                // Fetch group from Supabase
+                final supabase = Supabase.instance.client;
+                final response = await supabase.from('groups').select().eq('id', groupId);
+                if (response.isEmpty) {
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Group not found. Please check the QR code.')),
+                    SnackBar(content: Text('Group not found in database. Please check the QR code.')),
                   );
                   return;
                 }
                 
-                await GroupManager.joinGroup(group: group, userProfile: userProfile!);
+                await GroupManager.joinGroup(group: Group.fromJson(response[0]), userProfile: userProfile!);
                 Navigator.pop(ctx);
                 _loadData();
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Successfully joined group: ${group.name}')),
+                  SnackBar(content: Text('Successfully joined group: ${response[0]['name']}')),
                 );
               } catch (e) {
                 Navigator.pop(ctx);
@@ -430,51 +477,6 @@ class _GroupScreenState extends State<GroupScreen> {
         ),
       ),
     );
-  }
-
-  void _sendGroupSOS(Group group) async {
-    try {
-      // Update current user's status to SOS
-      if (userProfile != null) {
-        await GroupManager.updateMemberStatus(
-          groupId: group.id,
-          memberId: userProfile!.id,
-          status: 'SOS',
-        );
-        
-        // Reload data to show updated status
-        await _loadData();
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('SOS sent to group: ${group.name}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send SOS: ${e.toString()}')),
-      );
-    }
-  }
-
-  void _updateMemberStatus(Group group, String memberId, String newStatus) async {
-    try {
-      await GroupManager.updateMemberStatus(
-        groupId: group.id,
-        memberId: memberId,
-        status: newStatus,
-      );
-      await _loadData();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Member status updated to $newStatus')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to update status: ${e.toString()}')),
-      );
-    }
   }
 
   void _deleteGroupWithConfirmation(Group group) {
@@ -491,7 +493,9 @@ class _GroupScreenState extends State<GroupScreen> {
           ElevatedButton(
             onPressed: () async {
               try {
-                await GroupManager.deleteGroup(group.id);
+                final supabase = Supabase.instance.client;
+                final response = await supabase.from('groups').delete().eq('id', group.id);
+                // Supabase returns an empty list on successful delete, so treat this as success
                 // Also remove from debug list
                 _debugGroups.removeWhere((g) => g.id == group.id);
                 Navigator.pop(ctx);
@@ -535,23 +539,25 @@ class _GroupScreenState extends State<GroupScreen> {
         emergencyContact: 'Debug Contact',
         emergencyPhone: '+1234567890',
       );
-      await LocalStorage.saveUserProfile(userProfile!);
+      await my_local.LocalStorage.saveUserProfile(userProfile!);
     }
     
     try {
-      final testGroup = await GroupManager.createGroup(
-        name: 'Debug Test Group ${DateTime.now().millisecondsSinceEpoch}',
-        adminProfile: userProfile!,
-      );
-      print('Test group created: ${testGroup.name}');
+      final supabase = Supabase.instance.client;
+      final response = await supabase.from('groups').insert({
+        'name': 'Debug Test Group ${DateTime.now().millisecondsSinceEpoch}',
+        'admin_id': userProfile!.id,
+        // Add other necessary fields
+      });
+      print('Test group created: ${response[0]['name']}');
       
       // Immediately check if it's saved
-      final savedGroup = LocalStorage.getGroup(testGroup.id);
-      print('Saved group check: ${savedGroup?.name ?? 'null'}');
+      final fetchResponse = await supabase.from('groups').select().eq('id', response[0]['id']);
+      print('Saved group check: ${fetchResponse.isNotEmpty ? fetchResponse[0]['name'] : 'null'}');
       
       // Check all groups
-      final allGroups = GroupManager.getAllGroups();
-      print('All groups after creation: ${allGroups.length}');
+      final allGroupsResponse = await supabase.from('groups').select();
+      print('All groups after creation: ${allGroupsResponse.length}');
       
       // Reload data
       await _loadData();
@@ -561,7 +567,7 @@ class _GroupScreenState extends State<GroupScreen> {
       );
     } catch (e) {
       print('Debug test error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
+    ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Debug test failed: $e')),
       );
     }
@@ -688,7 +694,6 @@ class _GroupScreenState extends State<GroupScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(ctx);
-              _updateMemberStatus(group, member.id, selectedStatus);
             },
             child: Text('Update'),
           ),
@@ -701,6 +706,9 @@ class _GroupScreenState extends State<GroupScreen> {
   Widget build(BuildContext context) {
     print('=== BUILD METHOD ===');
     print('Groups count in build: ${groups.length}');
+    for (var g in groups) {
+      print('UI Group: id=${g.id}, name=${g.name}, adminId=${g.adminId}, createdAt=${g.createdAt}');
+    }
     print('Groups.isEmpty: ${groups.isEmpty}');
     
     return Scaffold(
@@ -709,66 +717,66 @@ class _GroupScreenState extends State<GroupScreen> {
       body: RefreshIndicator(
         onRefresh: _loadData,
         child: groups.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.groups, size: 80, color: Colors.grey.shade700),
+                  const SizedBox(height: 20),
+                  Text('No groups joined', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 10),
+                  Text('Create or join a group to get started.', style: TextStyle(color: Colors.white70, fontSize: 16)),
+                  const SizedBox(height: 30),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.group_add),
+                    label: Text('Create Group'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green.shade700,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: _createGroupDialog,
+                  ),
+                  const SizedBox(height: 12),
+                  ElevatedButton.icon(
+                    icon: Icon(Icons.group),
+                    label: Text('Join Group'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blue.shade700,
+                      padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                      textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    onPressed: _joinGroupDialog,
+                  ),
+                ],
+              ),
+            )
+          : ListView(
+              padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    Icon(Icons.groups, size: 80, color: Colors.grey.shade700),
-                    const SizedBox(height: 20),
-                    Text('No groups joined', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 10),
-                    Text('Create or join a group to get started.', style: TextStyle(color: Colors.white70, fontSize: 16)),
-                    const SizedBox(height: 30),
                     ElevatedButton.icon(
                       icon: Icon(Icons.group_add),
                       label: Text('Create Group'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.green.shade700,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       onPressed: _createGroupDialog,
                     ),
-                    const SizedBox(height: 12),
                     ElevatedButton.icon(
                       icon: Icon(Icons.group),
                       label: Text('Join Group'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue.shade700,
-                        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                        textStyle: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                       ),
                       onPressed: _joinGroupDialog,
                     ),
-                  ],
-                ),
-              )
-            : ListView(
-                padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.group_add),
-                        label: Text('Create Group'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green.shade700,
-                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: _createGroupDialog,
-                      ),
-                      ElevatedButton.icon(
-                        icon: Icon(Icons.group),
-                        label: Text('Join Group'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.blue.shade700,
-                          padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                          textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                        onPressed: _joinGroupDialog,
-                      ),
                       ElevatedButton.icon(
                         icon: Icon(Icons.bug_report),
                         label: Text('Debug'),
@@ -789,134 +797,131 @@ class _GroupScreenState extends State<GroupScreen> {
                         ),
                         onPressed: _testQrCode,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  ...groups.map((group) => Card(
-                        color: Color(0xFF232323),
-                        elevation: 6,
-                        margin: EdgeInsets.symmetric(vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
-                        child: ExpansionTile(
-                          title: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(group.name, style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                ...groups.map((group) => Card(
+                      color: Color(0xFF232323),
+                      elevation: 6,
+                      margin: EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      child: ExpansionTile(
+                        title: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(group.name, style: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.bold)),
+                                  if (group.members.isNotEmpty)
                                     Text(
                                       '${group.members.length} members • ${_getOnlineCount(group.members)} online',
                                       style: TextStyle(fontSize: 12, color: Colors.white70),
                                     ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                icon: Icon(Icons.qr_code, color: Colors.deepPurple, size: 28),
-                                tooltip: 'Show QR',
-                                onPressed: () => _showGroupQrDialog(group),
-                              ),
-                            ],
-                          ),
-                          subtitle: Text('ID: ${group.id}', style: TextStyle(color: Colors.white70)),
-                          children: [
-                            ListTile(
-                              title: Text('Admin: ${_getMemberName(group.adminId, group.members)}', style: TextStyle(color: Colors.white70)),
-                              subtitle: Text('Created: ${_formatDate(group.createdAt)}', style: TextStyle(color: Colors.white38)),
-                            ),
-                            ...group.members.map((m) => Card(
-                                  color: m.status == 'SOS'
-                                      ? Colors.red.shade900.withOpacity(0.3)
-                                      : m.status == 'OK'
-                                          ? Colors.green.shade900.withOpacity(0.3)
-                                          : Colors.grey.shade800.withOpacity(0.3),
-                                  margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
-                                  child: InkWell(
-                                    onLongPress: () => _showMemberStatusDialog(group, m),
-                                    child: ListTile(
-                                      leading: Container(
-                                        padding: EdgeInsets.all(8),
-                                        decoration: BoxDecoration(
-                                          color: m.status == 'SOS'
-                                              ? Colors.red
-                                              : m.status == 'OK'
-                                                  ? Colors.green
-                                                  : Colors.grey,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Icon(
-                                          m.status == 'SOS'
-                                              ? Icons.warning
-                                              : m.status == 'OK'
-                                                  ? Icons.check_circle
-                                                  : Icons.help,
-                                          color: Colors.white,
-                                          size: 20,
-                                        ),
-                                      ),
-                                      title: Text(
-                                        m.name, 
-                                        style: TextStyle(
-                                          fontSize: 18, 
-                                          color: Colors.white, 
-                                          fontWeight: FontWeight.bold
-                                        )
-                                      ),
-                                      subtitle: Text(
-                                        'Status: ${m.status} | Last seen: ${_formatDate(m.lastSeen)}', 
-                                        style: TextStyle(color: Colors.white70)
-                                      ),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          m.isOnline
-                                              ? Icon(Icons.wifi, color: Colors.green, size: 20)
-                                              : Icon(Icons.wifi_off, color: Colors.grey, size: 20),
-                                          if (m.id == group.adminId)
-                                            Container(
-                                              margin: EdgeInsets.only(left: 8),
-                                              padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                              decoration: BoxDecoration(
-                                                color: Colors.blue,
-                                                borderRadius: BorderRadius.circular(8),
-                                              ),
-                                              child: Text(
-                                                'Admin',
-                                                style: TextStyle(color: Colors.white, fontSize: 10),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                      contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                                      minLeadingWidth: 40,
+                                  if (group.members.isEmpty)
+                                    Text(
+                                      'No members',
+                                      style: TextStyle(fontSize: 12, color: Colors.white70, fontStyle: FontStyle.italic),
                                     ),
-                                  ),
-                                )),
-                            ButtonBar(
-                              children: [
-                                ElevatedButton.icon(
-                                  icon: Icon(Icons.sos),
-                                  label: Text('Send Group SOS'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: Colors.red.shade700,
-                                    padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-                                    textStyle: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                                  ),
-                                  onPressed: () => _sendGroupSOS(group),
-                                ),
-                                TextButton(
-                                  child: Text('Delete Group', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-                                  onPressed: () => _deleteGroupWithConfirmation(group),
-                                ),
-                              ],
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              icon: Icon(Icons.qr_code, color: Colors.deepPurple, size: 28),
+                              tooltip: 'Show QR',
+                              onPressed: () => _showGroupQrDialog(group),
                             ),
                           ],
                         ),
-                      )),
-                ],
+                        subtitle: Text('ID: ${group.id}', style: TextStyle(color: Colors.white70)),
+                        children: [
+                          ListTile(
+                            title: Text('Admin: ${group.adminId}', style: TextStyle(color: Colors.white70)),
+                            subtitle: Text('Created: ${_formatDate(group.createdAt)}', style: TextStyle(color: Colors.white38)),
+                          ),
+                          if (group.members.isNotEmpty)
+                            ...group.members.map((m) => Card(
+                              color: m.status == 'SOS'
+                                    ? Colors.red.shade900.withOpacity(0.3)
+                                  : m.status == 'OK'
+                                        ? Colors.green.shade900.withOpacity(0.3)
+                                        : Colors.grey.shade800.withOpacity(0.3),
+                              margin: EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+                                child: InkWell(
+                                  onLongPress: () => _showMemberStatusDialog(group, m),
+                              child: ListTile(
+                                    leading: Container(
+                                      padding: EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: m.status == 'SOS'
+                                            ? Colors.red
+                                            : m.status == 'OK'
+                                                ? Colors.green
+                                                : Colors.grey,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Icon(
+                                  m.status == 'SOS'
+                                      ? Icons.warning
+                                      : m.status == 'OK'
+                                          ? Icons.check_circle
+                                          : Icons.help,
+                                    color: Colors.white,
+                                    size: 20,
+                                  ),
+                            ),
+                                    title: Text(
+                                      m.name, 
+                                      style: TextStyle(
+                                        fontSize: 18, 
+                                        color: Colors.white, 
+                                        fontWeight: FontWeight.bold
+                                      )
+                                    ),
+                                    subtitle: Text(
+                                      'Status: ${m.status} | Last seen: ${_formatDate(m.lastSeen)}', 
+                                      style: TextStyle(color: Colors.white70)
+                                    ),
+                                    trailing: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        m.isOnline
+                                            ? Icon(Icons.wifi, color: Colors.green, size: 20)
+                                            : Icon(Icons.wifi_off, color: Colors.grey, size: 20),
+                                        if (m.id == group.adminId)
+                                          Container(
+                                            margin: EdgeInsets.only(left: 8),
+                                            padding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.blue,
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              'Admin',
+                                              style: TextStyle(color: Colors.white, fontSize: 10),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                contentPadding: EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                                minLeadingWidth: 40,
+                                  ),
+                              ),
+                            )),
+                          ButtonBar(
+                            children: [
+                              TextButton(
+                                child: Text('Delete Group', style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+                                onPressed: () => _deleteGroupWithConfirmation(group),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    )),
+              ],
               ),
-      ),
+            ),
       floatingActionButton: groups.isNotEmpty
           ? FloatingActionButton.extended(
               backgroundColor: Colors.green.shade700,
@@ -957,18 +962,18 @@ class _QrScannerState extends State<_QrScanner> {
           child: Stack(
             children: [
               MobileScanner(
-                onDetect: (capture) {
-                  if (scanned) return;
-                  final barcodes = capture.barcodes;
-                  for (final barcode in barcodes) {
-                    final data = barcode.rawValue;
-                    if (data != null && data.contains('id')) {
+      onDetect: (capture) {
+        if (scanned) return;
+        final barcodes = capture.barcodes;
+        for (final barcode in barcodes) {
+          final data = barcode.rawValue;
+          if (data != null && data.contains('id')) {
                       try {
-                        final id = RegExp(r'"id":"([^"]+)"').firstMatch(data)?.group(1);
-                        if (id != null) {
-                          scanned = true;
-                          widget.onGroupId(id);
-                          break;
+            final id = RegExp(r'"id":"([^"]+)"').firstMatch(data)?.group(1);
+            if (id != null) {
+              scanned = true;
+              widget.onGroupId(id);
+              break;
                         } else {
                           setState(() {
                             errorMessage = 'Invalid QR code format';
@@ -983,9 +988,9 @@ class _QrScannerState extends State<_QrScanner> {
                       setState(() {
                         errorMessage = 'Invalid QR code content';
                       });
-                    }
-                  }
-                },
+          }
+        }
+      },
                 errorBuilder: (context, error, child) {
                   return Center(
                     child: Column(

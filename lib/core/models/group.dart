@@ -78,13 +78,13 @@ class Group {
 
   factory Group.fromJson(Map<String, dynamic> json) {
     return Group(
-      id: json['id'],
-      name: json['name'],
-      adminId: json['adminId'],
-      members: (json['members'] as List)
-          .map((m) => GroupMember.fromJson(m))
-          .toList(),
-      createdAt: DateTime.fromMillisecondsSinceEpoch(json['createdAt']),
+      id: json['id'].toString(),
+      name: json['name'] ?? '',
+      adminId: json['admin_id'] ?? '',
+      members: [],
+      createdAt: json['created_at'] != null && json['created_at'] != 'NULL'
+          ? DateTime.tryParse(json['created_at']) ?? DateTime.now()
+          : DateTime.now(),
       description: json['description'] ?? '',
     );
   }

@@ -17,52 +17,52 @@ class LocalStorage {
 
   static Future<void> initialize() async {
     try {
-      await Hive.initFlutter();
-      
+    await Hive.initFlutter();
+    
       // Register adapters with error handling
       if (!Hive.isAdapterRegistered(0)) {
-        Hive.registerAdapter(UserProfileAdapter());
+    Hive.registerAdapter(UserProfileAdapter());
       }
       if (!Hive.isAdapterRegistered(1)) {
-        Hive.registerAdapter(GroupAdapter());
+    Hive.registerAdapter(GroupAdapter());
       }
       if (!Hive.isAdapterRegistered(2)) {
-        Hive.registerAdapter(GroupMemberAdapter());
+    Hive.registerAdapter(GroupMemberAdapter());
       }
       if (!Hive.isAdapterRegistered(3)) {
-        Hive.registerAdapter(SosMessageAdapter());
+    Hive.registerAdapter(SosMessageAdapter());
       }
       if (!Hive.isAdapterRegistered(4)) {
-        Hive.registerAdapter(ResourceModelAdapter());
+    Hive.registerAdapter(ResourceModelAdapter());
       }
-      
+    
       // Open boxes with error handling
       try {
-        await Hive.openBox<UserProfile>(_userProfileBox);
+    await Hive.openBox<UserProfile>(_userProfileBox);
       } catch (e) {
         print('Error opening user profile box: $e');
       }
       
       try {
-        await Hive.openBox<Group>(_groupsBox);
+    await Hive.openBox<Group>(_groupsBox);
       } catch (e) {
         print('Error opening groups box: $e');
       }
       
       try {
-        await Hive.openBox<SosMessage>(_sosLogBox);
+    await Hive.openBox<SosMessage>(_sosLogBox);
       } catch (e) {
         print('Error opening SOS log box: $e');
       }
       
       try {
-        await Hive.openBox<ResourceModel>(_resourcesBox);
+    await Hive.openBox<ResourceModel>(_resourcesBox);
       } catch (e) {
         print('Error opening resources box: $e');
       }
       
       try {
-        await Hive.openBox(_settingsBox);
+    await Hive.openBox(_settingsBox);
       } catch (e) {
         print('Error opening settings box: $e');
       }
@@ -76,8 +76,8 @@ class LocalStorage {
   // User Profile Methods
   static Future<void> saveUserProfile(UserProfile profile) async {
     try {
-      final box = Hive.box<UserProfile>(_userProfileBox);
-      await box.put('current', profile);
+    final box = Hive.box<UserProfile>(_userProfileBox);
+    await box.put('current', profile);
     } catch (e) {
       print('Error saving user profile: $e');
     }
@@ -85,8 +85,8 @@ class LocalStorage {
 
   static UserProfile? getUserProfile() {
     try {
-      final box = Hive.box<UserProfile>(_userProfileBox);
-      return box.get('current');
+    final box = Hive.box<UserProfile>(_userProfileBox);
+    return box.get('current');
     } catch (e) {
       print('Error getting user profile: $e');
       return null;
@@ -96,8 +96,8 @@ class LocalStorage {
   // Group Methods
   static Future<void> saveGroup(Group group) async {
     try {
-      final box = Hive.box<Group>(_groupsBox);
-      await box.put(group.id, group);
+    final box = Hive.box<Group>(_groupsBox);
+    await box.put(group.id, group);
     } catch (e) {
       print('Error saving group: $e');
     }
@@ -105,8 +105,8 @@ class LocalStorage {
 
   static Group? getGroup(String groupId) {
     try {
-      final box = Hive.box<Group>(_groupsBox);
-      return box.get(groupId);
+    final box = Hive.box<Group>(_groupsBox);
+    return box.get(groupId);
     } catch (e) {
       print('Error getting group: $e');
       return null;
@@ -115,7 +115,7 @@ class LocalStorage {
 
   static List<Group> getAllGroups() {
     try {
-      final box = Hive.box<Group>(_groupsBox);
+    final box = Hive.box<Group>(_groupsBox);
       if (!box.isOpen) {
         print('ERROR: Groups box is not open!');
         return [];
@@ -134,8 +134,8 @@ class LocalStorage {
 
   static Future<void> deleteGroup(String groupId) async {
     try {
-      final box = Hive.box<Group>(_groupsBox);
-      await box.delete(groupId);
+    final box = Hive.box<Group>(_groupsBox);
+    await box.delete(groupId);
     } catch (e) {
       print('Error deleting group: $e');
     }
