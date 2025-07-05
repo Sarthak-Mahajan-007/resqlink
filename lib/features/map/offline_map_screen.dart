@@ -25,6 +25,7 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
   List<ResourceModel> resources = [];
   StreamSubscription? _locationSub;
   Timer? _dataTimer;
+  final MapController _mapController = MapController();
 
   @override
   void initState() {
@@ -34,18 +35,29 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
   }
 
   void _startLocationUpdates() async {
+    // Request location permission explicitly
+    final permission = await Geolocator.requestPermission();
+    print('[DEBUG] Location permission status: ' + permission.toString());
     _locationSub = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
     ).listen((pos) {
+      print('[DEBUG] Got location update: \\${pos.latitude}, \\${pos.longitude}');
       setState(() {
         userLocation = LatLng(pos.latitude, pos.longitude);
       });
+      if (userLocation != null) {
+        _mapController.move(userLocation!, 15.0);
+      }
     });
     // Get initial location
     final pos = await LocationUtils.getCurrentLocation();
+    print('[DEBUG] Initial location: \\${pos?.latitude}, \\${pos?.longitude}');
     setState(() {
       userLocation = pos != null ? LatLng(pos.latitude, pos.longitude) : LatLng(28.6139, 77.2090);
     });
+    if (userLocation != null) {
+      _mapController.move(userLocation!, 15.0);
+    }
   }
 
   void _startDataPolling() {
@@ -54,12 +66,9 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
   }
 
   Future<void> _loadData() async {
-    // Get group members
     final groups = LocalStorage.getAllGroups();
     groupMembers = groups.expand((g) => g.members).toList();
-    // Get SOS messages
     sosMessages = LocalStorage.getSosLog();
-    // Get resources
     resources = LocalStorage.getAllResources();
     setState(() {});
   }
@@ -126,6 +135,7 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                 child: Stack(
                   children: [
                     FlutterMap(
+                      mapController: _mapController,
                       options: MapOptions(
                         initialCenter: userLocation ?? LatLng(28.6139, 77.2090),
                         initialZoom: 15.0,
@@ -153,7 +163,6 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                                 height: 48,
                                 child: _UserMarker(),
                               ),
-                            // Group members
                             ...groupMembers.where((m) => m.latitude != null && m.longitude != null).map((m) => Marker(
                               point: LatLng(m.latitude!, m.longitude!),
                               width: 40,
@@ -163,7 +172,6 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                                 child: _MapTypeMarker(type: 'Group', color: Colors.blue),
                               ),
                             )),
-                            // SOS messages
                             ...sosMessages.where((s) => s.latitude != null && s.longitude != null).map((s) => Marker(
                               point: LatLng(s.latitude!, s.longitude!),
                               width: 40,
@@ -173,7 +181,6 @@ class _OfflineMapScreenState extends State<OfflineMapScreen> {
                                 child: _MapTypeMarker(type: 'Rescue', color: Colors.red),
                               ),
                             )),
-                            // Resources
                             ...resources.where((r) => r.latitude != null && r.longitude != null).map((r) => Marker(
                               point: LatLng(r.latitude!, r.longitude!),
                               width: 40,

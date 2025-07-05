@@ -10,6 +10,7 @@ class UserProfile {
   final List<String> chronicConditions;
   final String emergencyContact;
   final String emergencyPhone;
+  final String? email;
   final String notes;
 
   UserProfile({
@@ -21,6 +22,7 @@ class UserProfile {
     required this.chronicConditions,
     required this.emergencyContact,
     required this.emergencyPhone,
+    this.email,
     this.notes = '',
   });
 
@@ -35,6 +37,7 @@ class UserProfile {
       'chronicConditions': chronicConditions,
       'emergencyContact': emergencyContact,
       'emergencyPhone': emergencyPhone,
+      'email': email,
       'notes': notes,
     };
   }
@@ -46,10 +49,11 @@ class UserProfile {
       name: json['name'],
       age: json['age'],
       bloodGroup: json['bloodGroup'],
-      allergies: List<String>.from(json['allergies']),
-      chronicConditions: List<String>.from(json['chronicConditions']),
+      allergies: List<String>.from(json['allergies'] ?? []),
+      chronicConditions: List<String>.from(json['chronicConditions'] ?? []),
       emergencyContact: json['emergencyContact'],
       emergencyPhone: json['emergencyPhone'],
+      email: json['email'],
       notes: json['notes'] ?? '',
     );
   }
@@ -63,6 +67,7 @@ class UserProfile {
     List<String>? chronicConditions,
     String? emergencyContact,
     String? emergencyPhone,
+    String? email,
     String? notes,
   }) {
     return UserProfile(
@@ -74,6 +79,7 @@ class UserProfile {
       chronicConditions: chronicConditions ?? this.chronicConditions,
       emergencyContact: emergencyContact ?? this.emergencyContact,
       emergencyPhone: emergencyPhone ?? this.emergencyPhone,
+      email: email ?? this.email,
       notes: notes ?? this.notes,
     );
   }

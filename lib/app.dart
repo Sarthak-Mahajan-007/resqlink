@@ -20,6 +20,7 @@ import 'features/first_aid/first_aid_screen.dart';
 import 'features/qr_code/qr_code_screen.dart';
 import 'features/volunteer/volunteer_mode_screen.dart';
 import 'features/about/about_screen.dart';
+import 'features/group/group_linking_screen.dart';
 
 class ResQlinkApp extends StatelessWidget {
   const ResQlinkApp({Key? key}) : super(key: key);
@@ -222,6 +223,16 @@ class _MainScaffoldState extends State<MainScaffold> {
                 Navigator.pop(context);
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) => const VolunteerModeScreen(),
+                ));
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.link),
+              title: Text('Group Quick Actions'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => const GroupLinkingScreen(),
                 ));
               },
             ),
