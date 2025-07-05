@@ -31,7 +31,7 @@ dependencies:
   flutter:
     sdk: flutter
   shared_preferences: ^2.2.2
-  url_launcher: ^6.2.6
+  url_launcher: ^6.3.1
   supabase_flutter: ^2.3.4
 
   # The following adds the Cupertino Icons font to your application.
@@ -46,6 +46,7 @@ dependencies:
   uuid: ^4.3.3 # UUID generation
   flutter_ble_peripheral: ^1.2.6 # BLE advertising
   geocoding: ^2.1.0 # Reverse geocoding
+  http: ^1.1.0 # HTTP requests for APIs
   flutter_map: ^8.1.1
   latlong2: ^0.9.0
   qr_flutter: ^4.1.0

@@ -200,10 +200,10 @@ class _MainScaffoldState extends State<MainScaffold> {
             ),
             ListTile(
               leading: Icon(Icons.local_hospital),
-              title: Text('Nearby Hospitals'),
+              title: Text('Navigate to Hospitals'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyHospitalsScreen()));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OfflineMapScreen()));
               },
             ),
             ListTile(
