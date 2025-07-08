@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'features/home/home_dashboard.dart';
 import 'features/sos/sos_sender.dart';
 import 'features/sos/sos_receiver.dart';
-import 'features/map/offline_map_screen.dart';
+import 'features/map/map_screen.dart';
 import 'features/group/group_screen.dart';
 import 'features/resource_broadcast/resource_broadcast_screen.dart';
 import 'features/log/incident_log_screen.dart';
@@ -21,6 +21,7 @@ import 'features/qr_code/qr_code_screen.dart';
 import 'features/volunteer/volunteer_mode_screen.dart';
 import 'features/about/about_screen.dart';
 import 'features/group/group_linking_screen.dart';
+import 'features/profile/profile_screen.dart';
 
 class ResQlinkApp extends StatelessWidget {
   const ResQlinkApp({Key? key}) : super(key: key);
@@ -73,6 +74,9 @@ class ResQlinkApp extends StatelessWidget {
       ),
       themeMode: themeNotifier.themeMode,
       home: const MainScaffold(),
+      routes: {
+        '/profile': (context) => const ProfileScreen(),
+      },
     );
   }
 }
@@ -90,7 +94,7 @@ class _MainScaffoldState extends State<MainScaffold> {
 
   final List<Widget> _screens = [
     const HomeDashboard(),
-    const OfflineMapScreen(),
+    const MapScreen(),
     const GroupScreen(),
     const ResourceBroadcastScreen(),
     const IncidentLogScreen(),
@@ -165,6 +169,12 @@ class _MainScaffoldState extends State<MainScaffold> {
         title: Text(_titles[_currentIndex]),
         actions: [
           const AppBarStatusIndicators(),
+          IconButton(
+            icon: const Icon(Icons.person),
+            onPressed: () {
+              Navigator.pushNamed(context, '/profile');
+            },
+          ),
         ],
       ),
       drawer: Drawer(
@@ -203,7 +213,7 @@ class _MainScaffoldState extends State<MainScaffold> {
               title: Text('Navigate to Hospitals'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const OfflineMapScreen()));
+                Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MapScreen()));
               },
             ),
             ListTile(

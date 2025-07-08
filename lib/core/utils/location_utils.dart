@@ -1,5 +1,8 @@
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:latlong2/latlong.dart';
 
 // Location helpers
 class LocationUtils {
@@ -82,6 +85,92 @@ class LocationUtils {
     } catch (e) {
       print('Error getting address: $e');
       return 'Unknown location';
+    }
+  }
+
+  // Route calculation using OSRM (Open Source Routing Machine)
+  static Future<RouteInfo?> calculateRoute(
+    double startLat, double startLng, 
+    double endLat, double endLng) async {
+    try {
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '$startLng,$startLat;$endLng,$endLat'
+        '?overview=full&geometries=geojson'
+      );
+
+      final response = await http.get(url);
+      
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final geometry = route['geometry'];
+          final coordinates = geometry['coordinates'] as List;
+          
+          // Convert coordinates to LatLng points
+          final points = coordinates.map((coord) {
+            return LatLng(coord[1] as double, coord[0] as double);
+          }).toList();
+          
+          return RouteInfo(
+            points: points,
+            distance: route['distance'] as double,
+            duration: route['duration'] as double,
+          );
+        }
+      }
+      
+      return null;
+    } catch (e) {
+      print('Error calculating route: $e');
+      return null;
+    }
+  }
+
+  // Calculate a simple straight-line route (fallback when API is unavailable)
+  static RouteInfo calculateStraightLineRoute(
+    double startLat, double startLng, 
+    double endLat, double endLng) {
+    
+    final startPoint = LatLng(startLat, startLng);
+    final endPoint = LatLng(endLat, endLng);
+    final distance = calculateDistance(startLat, startLng, endLat, endLng);
+    
+    // Estimate duration (assuming average walking speed of 1.4 m/s)
+    final estimatedDuration = distance / 1.4;
+    
+    return RouteInfo(
+      points: [startPoint, endPoint],
+      distance: distance,
+      duration: estimatedDuration,
+    );
+  }
+}
+
+// Route information model
+class RouteInfo {
+  final List<LatLng> points;
+  final double distance; // in meters
+  final double duration; // in seconds
+
+  RouteInfo({
+    required this.points,
+    required this.distance,
+    required this.duration,
+  });
+
+  String get formattedDistance => LocationUtils.formatDistance(distance);
+  
+  String get formattedDuration {
+    final hours = (duration / 3600).floor();
+    final minutes = ((duration % 3600) / 60).round();
+    
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
     }
   }
 } 

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../core/models/user_profile.dart';
-import '../../core/storage/local_storage.dart';
-import 'package:uuid/uuid.dart';
+import '../../core/models/profile.dart';
+import '../../core/models/health_card.dart';
+import '../../core/api/profile_api.dart';
 
 class EditHealthCardScreen extends StatefulWidget {
   const EditHealthCardScreen({Key? key}) : super(key: key);
@@ -23,6 +23,8 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
   final List<String> _chronicConditions = [];
   
   final List<String> _bloodGroups = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  bool _isLoading = true;
+  Profile? _profile;
 
   @override
   void initState() {
@@ -30,17 +32,31 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
     _loadExistingProfile();
   }
 
-  void _loadExistingProfile() {
-    final profile = LocalStorage.getUserProfile();
-    if (profile != null) {
-      _nameController.text = profile.name;
-      _ageController.text = profile.age.toString();
-      _selectedBloodGroup = profile.bloodGroup;
-      _allergies.addAll(profile.allergies);
-      _chronicConditions.addAll(profile.chronicConditions);
-      _emergencyContactController.text = profile.emergencyContact;
-      _emergencyPhoneController.text = profile.emergencyPhone;
-      _notesController.text = profile.notes;
+  void _loadExistingProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      final profile = await ProfileApi.fetchProfile(1); // Using user ID 1 for demo
+      setState(() {
+        _profile = profile;
+        if (profile != null) {
+          _nameController.text = profile.bio ?? '';
+          _selectedBloodGroup = profile.healthCard?.bloodGroup ?? 'A+';
+          if (profile.healthCard?.allergies != null) {
+            _allergies.addAll(profile.healthCard!.allergies!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty));
+          }
+          if (profile.healthCard?.medicalConditions != null) {
+            _chronicConditions.addAll(profile.healthCard!.medicalConditions!.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty));
+          }
+          _emergencyContactController.text = profile.healthCard?.emergencyContact ?? '';
+          _notesController.text = profile.healthCard?.medicalConditions ?? '';
+        }
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load profile: $e')),
+      );
     }
   }
 
@@ -56,6 +72,12 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Health Card'),
@@ -63,11 +85,13 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
         foregroundColor: Colors.white,
         actions: [
           TextButton(
-            onPressed: _saveProfile,
-            child: const Text(
-              'Save',
-              style: TextStyle(color: Colors.white, fontSize: 16),
-            ),
+            onPressed: _isLoading ? null : _saveProfile,
+            child: _isLoading 
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+              : const Text(
+                  'Save',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
           ),
         ],
       ),
@@ -89,16 +113,18 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _saveProfile,
+                  onPressed: _isLoading ? null : _saveProfile,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.red,
                     foregroundColor: Colors.white,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
-                  child: const Text(
-                    'Save Health Card',
-                    style: TextStyle(fontSize: 18),
-                  ),
+                  child: _isLoading 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Text(
+                        'Save Health Card',
+                        style: TextStyle(fontSize: 18),
+                      ),
                 ),
               ),
             ],
@@ -338,30 +364,58 @@ class _EditHealthCardScreenState extends State<EditHealthCardScreen> {
     );
   }
 
-  void _saveProfile() {
+  void _saveProfile() async {
     if (_formKey.currentState!.validate()) {
-      final profile = UserProfile(
-        id: const Uuid().v4(),
-        name: _nameController.text.trim(),
-        age: int.parse(_ageController.text),
-        bloodGroup: _selectedBloodGroup,
-        allergies: List.from(_allergies),
-        chronicConditions: List.from(_chronicConditions),
-        emergencyContact: _emergencyContactController.text.trim(),
-        emergencyPhone: _emergencyPhoneController.text.trim(),
-        notes: _notesController.text.trim(),
-      );
+      setState(() => _isLoading = true);
+      try {
+        final updatedHealthCard = HealthCard(
+          id: _profile?.healthCard?.id ?? 1,
+          bloodGroup: _selectedBloodGroup,
+          allergies: _allergies.join(', '),
+          medicalConditions: _chronicConditions.join(', '),
+          emergencyContact: _emergencyContactController.text.trim(),
+          createdAt: _profile?.healthCard?.createdAt ?? DateTime.now(),
+        );
+        
+        final updatedProfile = Profile(
+          id: _profile?.id ?? 1,
+          userId: _profile?.userId ?? 1,
+          healthCardId: updatedHealthCard.id,
+          bio: _nameController.text.trim(),
+          avatarUrl: _profile?.avatarUrl,
+          dateOfBirth: _profile?.dateOfBirth,
+          gender: _profile?.gender,
+          createdAt: _profile?.createdAt ?? DateTime.now(),
+          healthCard: updatedHealthCard,
+        );
 
-      LocalStorage.saveUserProfile(profile);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Health card saved successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-      
-      Navigator.pop(context);
+        final success = await ProfileApi.saveProfile(updatedProfile);
+        if (success) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Health card saved successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          Navigator.pop(context);
+        } else {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Failed to save health card'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving health card: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 } 

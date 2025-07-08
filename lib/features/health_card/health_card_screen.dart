@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../core/models/user_profile.dart';
-import '../../core/storage/local_storage.dart';
+import '../../core/api/profile_api.dart';
+import '../../core/models/profile.dart';
 import 'edit_health_card.dart';
 import '../../theme/app_theme.dart';
 
@@ -12,7 +13,8 @@ class HealthCardScreen extends StatefulWidget {
 }
 
 class _HealthCardScreenState extends State<HealthCardScreen> {
-  UserProfile? _profile;
+  Profile? _profile;
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -20,15 +22,30 @@ class _HealthCardScreenState extends State<HealthCardScreen> {
     _loadProfile();
   }
 
-  void _loadProfile() {
-    final profile = LocalStorage.getUserProfile();
-    setState(() {
-      _profile = profile;
-    });
+  void _loadProfile() async {
+    setState(() => _isLoading = true);
+    try {
+      final profile = await ProfileApi.fetchProfile(1); // Using user ID 1 for demo
+      setState(() {
+        _profile = profile;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load health card: $e')),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.background,
       appBar: AppBar(
@@ -58,17 +75,24 @@ class _HealthCardScreenState extends State<HealthCardScreen> {
             _FormFieldCard(
               icon: Icons.person,
               label: 'Name',
-              child: TextField(decoration: InputDecoration(hintText: 'Enter your name')),
+              child: TextField(
+                decoration: InputDecoration(hintText: 'Enter your name'),
+                controller: TextEditingController(text: _profile?.bio ?? ''),
+              ),
             ),
             _FormFieldCard(
               icon: Icons.calendar_today,
               label: 'Age',
-              child: TextField(keyboardType: TextInputType.number, decoration: InputDecoration(hintText: 'Enter your age')),
+              child: TextField(
+                keyboardType: TextInputType.number, 
+                decoration: InputDecoration(hintText: 'Enter your age'),
+              ),
             ),
             _FormFieldCard(
               icon: Icons.opacity,
               label: 'Blood Type',
               child: DropdownButtonFormField<String>(
+                value: _profile?.healthCard?.bloodGroup,
                 items: ['A+', 'B+', 'O+', 'AB+', 'A-', 'B-', 'O-', 'AB-']
                     .map((type) => DropdownMenuItem(value: type, child: Text(type)))
                     .toList(),
@@ -79,17 +103,28 @@ class _HealthCardScreenState extends State<HealthCardScreen> {
             _FormFieldCard(
               icon: Icons.warning,
               label: 'Allergies',
-              child: TextField(maxLines: 2, decoration: InputDecoration(hintText: 'List allergies')),
+              child: TextField(
+                maxLines: 2, 
+                decoration: InputDecoration(hintText: 'List allergies'),
+                controller: TextEditingController(text: _profile?.healthCard?.allergies ?? ''),
+              ),
             ),
             _FormFieldCard(
               icon: Icons.medical_services,
               label: 'Medical Conditions',
-              child: TextField(maxLines: 2, decoration: InputDecoration(hintText: 'List conditions')),
+              child: TextField(
+                maxLines: 2, 
+                decoration: InputDecoration(hintText: 'List conditions'),
+                controller: TextEditingController(text: _profile?.healthCard?.medicalConditions ?? ''),
+              ),
             ),
             _FormFieldCard(
               icon: Icons.phone,
               label: 'Emergency Contact',
-              child: TextField(decoration: InputDecoration(hintText: 'Enter contact number')),
+              child: TextField(
+                decoration: InputDecoration(hintText: 'Enter contact number'),
+                controller: TextEditingController(text: _profile?.healthCard?.emergencyContact ?? ''),
+              ),
             ),
             const SizedBox(height: 32),
             // QR Code Section

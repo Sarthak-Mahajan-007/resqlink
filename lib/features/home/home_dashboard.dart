@@ -304,7 +304,12 @@ class _HomeDashboardState extends State<HomeDashboard> {
               children: [
                 Icon(Icons.location_on, color: AppTheme.success), // map-pin
                 const SizedBox(width: 8),
-                Text('Current Location: 28.6139, 77.2090', style: TextStyle(color: AppTheme.navy, fontSize: 16)),
+                Text(
+                  _latitude != null && _longitude != null
+                      ? 'Current Location: ${LocationUtils.formatCoordinates(_latitude, _longitude)}'
+                      : 'Getting location...',
+                  style: TextStyle(color: AppTheme.navy, fontSize: 16)
+                ),
               ],
             ),
             const SizedBox(height: 32),

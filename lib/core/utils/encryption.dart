@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:math';
 import 'package:encrypt/encrypt.dart';
+import 'package:crypto/crypto.dart';
 
 // AES encryption/decryption helpers
 class EncryptionUtils {

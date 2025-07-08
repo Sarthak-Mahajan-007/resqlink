@@ -6,6 +6,8 @@ import '../models/resource_model.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/contact.dart';
 import 'dart:convert';
+import '../models/profile.dart';
+import '../models/health_card.dart';
 
 class LocalStorage {
   static const String _userProfileBox = 'user_profile';
@@ -232,6 +234,37 @@ class LocalStorage {
       contacts.removeAt(index);
       await saveContacts(contacts);
     }
+  }
+
+  static Profile? _demoProfile;
+
+  static Profile? getProfile() {
+    // Return a demo profile if not set
+    if (_demoProfile == null) {
+      _demoProfile = Profile(
+        id: 1,
+        userId: 1,
+        healthCardId: 1,
+        bio: 'Flutter developer and rescuer',
+        avatarUrl: '',
+        dateOfBirth: DateTime(2000, 1, 1),
+        gender: 'Other',
+        createdAt: DateTime.now(),
+        healthCard: HealthCard(
+          id: 1,
+          bloodGroup: 'O+',
+          allergies: 'None',
+          medicalConditions: 'None',
+          emergencyContact: '1234567890',
+          createdAt: DateTime.now(),
+        ),
+      );
+    }
+    return _demoProfile;
+  }
+
+  static void saveProfile(Profile profile) {
+    _demoProfile = profile;
   }
 }
 

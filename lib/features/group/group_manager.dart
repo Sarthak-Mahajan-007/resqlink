@@ -155,7 +155,7 @@ class GroupManager {
       // Get current location
       final position = await LocationUtils.getCurrentLocation();
       
-      // Send via BLE mesh
+      // Send via BLE mesh (for local/offline use)
       await _bleMeshService.sendGroupSos(
         groupId,
         message,
@@ -171,10 +171,25 @@ class GroupManager {
         lat: position?.latitude,
         lng: position?.longitude,
       );
-      
       _updateGroup(updatedGroup);
       
-      print('✅ Group SOS sent: $message');
+      // --- Supabase: Send SOS to all group members ---
+      final supabase = Supabase.instance.client;
+      final senderId = int.tryParse(_currentUser!.id) ?? -1;
+      final now = DateTime.now();
+      for (final member in group.members) {
+        if (member.id == _currentUser!.id) continue; // Don't send to self
+        await supabase.from('sos_messages').insert({
+          'group_id': groupId,
+          'sender_id': senderId,
+          'recipient_id': int.tryParse(member.id) ?? -1,
+          'message': message,
+          'latitude': position?.latitude,
+          'longitude': position?.longitude,
+          'timestamp': now.toIso8601String(),
+        });
+      }
+      print('✅ Group SOS sent to all group members via Supabase');
     } catch (e) {
       print('❌ Error sending group SOS: $e');
     }

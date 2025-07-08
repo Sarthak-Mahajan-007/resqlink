@@ -1,0 +1,30 @@
+{
+  "name": "resqlink2.0",
+  "version": "1.0.0",
+  "description": "885A neted\r w Flutter project.",
+  "main": "index.js",
+  "directories": {
+    "lib": "lib",
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sarthak-Mahajan-007/resqlink2.0.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Sarthak-Mahajan-007/resqlink2.0/issues"
+  },
+  "homepage": "https://github.com/Sarthak-Mahajan-007/resqlink2.0#readme",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  }
+}
